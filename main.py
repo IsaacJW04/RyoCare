@@ -1,15 +1,26 @@
 import asyncio
+from os import getenv
+import json
+
 
 from dotenv import load_dotenv
 from livekit.agents import AutoSubscribe, JobContext, WorkerOptions, cli, llm
 from livekit.agents.voice_assistant import VoiceAssistant
 from livekit.plugins import google, silero
-from api import AssistantFnc
 
 load_dotenv()
 
 
 async def entrypoint(ctx: JobContext):
+    try:
+        with open(getenv("GOOGLE_APPLICATION_CREDENTIALS"), "r") as f:
+            Credentials = json.load(f)
+
+    except Exception as e:
+        raise ValueError(f"Failed to load Google credentials: {e}")
+   
+
+    
     initial_ctx = llm.ChatContext().append(
         role="system",
         text=(
@@ -19,15 +30,25 @@ async def entrypoint(ctx: JobContext):
         ),
     )
     await ctx.connect(auto_subscribe=AutoSubscribe.AUDIO_ONLY)
-    fnc_ctx = AssistantFnc()
 
     assitant = VoiceAssistant(
         vad=silero.VAD.load(),
-        stt=google.STT(),
-        llm=google.LLM(),
-        tts=google.TTS(),
+        stt=google.STT(
+        model="default",
+        spoken_punctuation=True,
+        language_code="en-US",
+
+        credentials_info = Credentials
+),
+        llm=google.LLM(
+        model="gemini-2.0-flash-exp",
+        temperature="0.8",
+),
+        tts=google.TTS(
+        gender="female",
+        voice_name="en-US-Standard-H",
+),
         chat_ctx=initial_ctx,
-        fnc_ctx=fnc_ctx,
     )
     assitant.start(ctx.room)
 
